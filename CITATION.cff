@@ -1,0 +1,53 @@
+cff-version: 1.2.0
+message: "If you use the Splat Trainer, please cite it as below. It was co-created with generative AI; see the README's 'Credits and AI disclosure'."
+type: software
+title: "How Gaussian splatting works: an interactive Splat Trainer"
+version: 1.0.0
+date-released: 2026-10-27
+authors:
+  - alias: adpchrgruber
+repository-code: "https://github.com/adpchrgruber/adp_adv_gaussian_splatting"
+url: "https://adpchrgruber.github.io/adp_adv_gaussian_splatting/"
+abstract: >-
+  Browser page that explains Gaussian splatting by training real 2D Gaussian splats to
+  match a picture: front-to-back blending, gradient descent, densification, with
+  render, ellipse and layer views and a per-splat inspector. Developed with generative
+  AI assistance (Claude Opus 5.5 in Claude Code, Anthropic), directed and reviewed by
+  the author.
+keywords:
+  - Gaussian splatting
+  - 3D Gaussian Splatting
+  - point cloud
+  - teaching
+  - WebGL
+references:
+  - type: article
+    title: "3D Gaussian Splatting for Real-Time Radiance Field Rendering"
+    authors:
+      - family-names: Kerbl
+        given-names: Bernhard
+      - family-names: Kopanas
+        given-names: Georgios
+      - family-names: Leimkühler
+        given-names: Thomas
+      - family-names: Drettakis
+        given-names: George
+    journal: "ACM Transactions on Graphics"
+    volume: 42
+    issue: 4
+    year: 2023
+    doi: "10.1145/3592433"
+  - type: software
+    title: "Claude (Opus 5.5 version)"
+    authors:
+      - name: Anthropic
+    year: 2026
+    url: "https://www.anthropic.com/claude"
+    notes: "Large language model; wrote code and texts for the Splat Trainer."
+  - type: software
+    title: "Claude Code"
+    authors:
+      - name: Anthropic
+    year: 2026
+    url: "https://claude.com/claude-code"
+    notes: "Coding agent used to develop the Splat Trainer."

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How Gaussian splatting works - interactive splat trainer</title>
+  <meta name="theme-color" content="#111214">
+  <meta name="author" content="adpchrgruber">
+  <meta name="ai-disclosure" content="Code and texts written with generative AI assistance (Claude Opus 5.5, Anthropic, via Claude Code); directed and reviewed by adpchrgruber. See section 06 and the README.">
+  <meta name="description" content="Watch Gaussian splats learn a picture: soft coloured ellipses are placed, blended, compared with the photo and nudged by gradient descent, split and pruned, step by step.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='%23000' fill-opacity='.55'%3E%3Cellipse cx='11' cy='19' rx='8' ry='4.5' transform='rotate(-30 11 19)'/%3E%3Cellipse cx='19' cy='22' rx='5' ry='3' transform='rotate(20 19 22)'/%3E%3C/g%3E%3Cellipse cx='22' cy='10' rx='6.5' ry='3.6' transform='rotate(35 22 10)' fill='%23002FA7'/%3E%3C/svg%3E">
+  <script>
+    // Runs before first paint to avoid a theme flash.
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('theme'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = 'dark'; // dark first; the sun / moon button switches and is remembered
+      document.documentElement.dataset.theme = t;
+      document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#111214' : '#FFFFFF';
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside id="ui">
+    <header>
+      <div class="eyebrow"><span class="blue">Points</span> - Splat Trainer</div>
+      <h1>How Gaussian<br>splatting works</h1>
+      <p class="sub">Soft ellipses learn a picture, step by step.</p>
+      <p class="aiNote">Made with generative AI assistance - see <a href="#secCredits">06</a></p>
+    </header>
+
+    <div id="panels">
+      <section class="section" id="secTrain">
+        <h2><span class="blue">01</span> Train</h2>
+        <div class="row">
+          <button id="btnRun" class="primary">Start</button>
+          <button id="btnStep" title="one training step">Step</button>
+          <button id="btnReset">Reset</button>
+        </div>
+        <div class="field"><label for="image">Photo</label><select id="image"></select></div>
+        <input type="file" id="file" accept="image/*" hidden>
+        <div class="field"><label for="initMode">Start from</label>
+          <select id="initMode">
+            <option value="points">Sparse points (like structure from motion)</option>
+            <option value="random">Random splats</option>
+          </select>
+        </div>
+        <div class="slider"><label for="initCount">Splats</label><input id="initCount" type="range" min="20" max="1000" step="10" value="150"><output id="initCountOut"></output></div>
+        <div class="field"><label for="res">Resolution</label>
+          <select id="res"><option value="64">64 x 64 px</option><option value="96" selected>96 x 96 px</option><option value="128">128 x 128 px (slow)</option></select>
+        </div>
+        <div class="slider"><label for="lr">Step size</label><input id="lr" type="range" min="0.25" max="2" step="0.25" value="1"><output id="lrOut"></output></div>
+      </section>
+
+      <section class="section" id="secDensify">
+        <h2><span class="blue">02</span> Densify</h2>
+        <label class="check"><input type="checkbox" id="chkDensify" checked> Split, clone and prune every 100 steps</label>
+        <div class="slider"><label for="maxSplats">Max splats</label><input id="maxSplats" type="range" min="100" max="4000" step="100" value="1500"><output id="maxSplatsOut"></output></div>
+        <p class="note" id="densifyInfo">Where the error stays high, big splats are <b>split</b> in two and small ones <b>cloned</b>. Nearly invisible splats are <b>pruned</b>. Runs until step 2000.</p>
+      </section>
+
+      <section class="section" id="secDisplay">
+        <h2><span class="blue">03</span> Display</h2>
+        <div class="slider"><label for="size">Splat size</label><input id="size" type="range" min="0.1" max="1" step="0.05" value="1"><output id="sizeOut"></output></div>
+        <label class="check"><input type="checkbox" id="chkCentres"> Show centres</label>
+        <div class="slider" id="spreadRow"><label for="spread">Layers</label><input id="spread" type="range" min="0" max="1.5" step="0.05" value="0.5"><output id="spreadOut"></output></div>
+        <p class="note">Shrink the splats to see that the picture is made of soft blobs. <b>Layers</b> pulls them apart in depth: the order in which they are blended.</p>
+      </section>
+
+      <section class="section" id="secSplat">
+        <h2><span class="blue">04</span> One splat</h2>
+        <p class="note" id="splatEmpty">Click the <b>photo</b> or the <b>splats</b> to pick the splat that paints that spot.</p>
+        <div id="splatInfo" class="hidden">
+          <div class="splatHead"><span class="swatch" id="swatch"></span><b id="splatTitle"></b></div>
+          <table class="params" id="splatTable"></table>
+          <label class="check"><input type="checkbox" id="chkSolo"> Show only this splat</label>
+          <div class="row" style="margin-top:8px"><button id="btnDeselect">Deselect</button></div>
+        </div>
+        <p class="note" style="margin-top:10px">Here a splat is <b>9 numbers</b>. A 3D splat has <b>59</b>: position 3, scale 3, rotation 4, opacity 1 and 48 colour coefficients, so its colour can change with the viewing angle.</p>
+      </section>
+
+      <section class="section" id="secHow">
+        <h2><span class="blue">05</span> How it works</h2>
+        <p class="note"><b>1 Photos.</b> Take many photos around a scene. Structure from motion finds where each camera stood and a sparse <b>point cloud</b> of features.</p>
+        <p class="note"><b>2 Splats.</b> Every point becomes a <b>3D Gaussian</b>: a soft, coloured, semi-transparent ellipsoid with a position, size, rotation, colour and opacity.</p>
+        <p class="note"><b>3 Render.</b> For one camera, each ellipsoid is projected into an <b>ellipse</b>. The ellipses are sorted by depth and blended front to back until a pixel is full. This page does exactly this step, in 2D.</p>
+        <p class="note"><b>4 Compare.</b> The render is compared with the real photo. The error flows back to every splat that touched a pixel (the <b>gradient</b>): move, stretch, turn, recolour, fade.</p>
+        <p class="note"><b>5 Densify.</b> Where splats keep being pulled, they are split or cloned. Faint ones are removed.</p>
+        <p class="note"><b>6 Repeat</b> thousands of times, with a different photo each step. A splat must look right from every camera, so it ends up at the right depth. The result renders in real time.</p>
+      </section>
+
+      <section class="section" id="secCredits">
+        <h2><span class="blue">06</span> Credits and AI disclosure</h2>
+        <p class="note">After B. Kerbl, G. Kopanas, T. Leimk&uuml;hler, G. Drettakis: <a href="https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/" target="_blank" rel="noopener">3D Gaussian Splatting for Real-Time Radiance Field Rendering</a>, SIGGRAPH 2023. Blending, gradients and densification follow the paper, reduced to 2D and written for the browser.</p>
+        <p class="note">Companion to the <a href="https://github.com/adpchrgruber/adp_adv_pointcloud_simulator" target="_blank" rel="noopener">Scanner Simulator</a>. UI style follows <a href="https://github.com/adpchrgruber/adp_adv_point_lab" target="_blank" rel="noopener">Scan Matter</a>.</p>
+        <h3>Use of generative AI</h3>
+        <p class="note">This page was co-created by <b>adpchrgruber</b> and generative AI. <b>Claude Opus 5.5</b> (Anthropic), working as a coding agent in <a href="https://claude.com/claude-code" target="_blank" rel="noopener">Claude Code</a> in October 2026, wrote the code (trainer, gradients, WebGL viewer, the drawn test pictures, interface) and the texts on this page, and tested them.</p>
+        <p class="note"><b>Human contribution.</b> adpchrgruber conceived the page, set its brief and direction, reviewed the results and publishes it, and takes responsibility for it.</p>
+        <p class="note"><b>No AI imagery.</b> The test pictures are drawn by code, and the splat images are computed live in your browser by gradient descent, not by a generative AI model.</p>
+        <p class="note">Cite the AI tools as: Anthropic. (2026). <i>Claude</i> (Opus 5.5 version) [Large language model]. https://www.anthropic.com/claude</p>
+      </section>
+    </div>
+  </aside>
+
+  <div id="stage">
+    <main id="panes">
+      <section class="pane" id="photoPane">
+        <div class="pane-title">
+          <span>The photo</span>
+          <span class="tabs">
+            <button class="tab active" data-view="photo">Photo</button>
+            <button class="tab" data-view="error">Error</button>
+          </span>
+        </div>
+        <div class="stage" id="photoStage"><canvas id="photoCanvas"></canvas><div class="mark" id="photoMark"></div></div>
+        <div class="readout" id="readoutL"></div>
+      </section>
+
+      <section class="pane" id="splatPane">
+        <div class="pane-title">
+          <span>The splats</span>
+          <span class="tabs">
+            <button class="tab active" data-view="render">Render</button>
+            <button class="tab" data-view="ellipses">Ellipses</button>
+            <button class="tab" data-view="layers">Layers</button>
+          </span>
+        </div>
+        <div class="stage" id="splatStage"><canvas id="splatCanvas"></canvas><div class="stageHint" id="layersHint">drag to orbit - wheel to zoom</div></div>
+        <div class="readout" id="readoutR"></div>
+      </section>
+    </main>
+
+    <div id="stage-controls">
+      <button id="btnTheme" type="button" aria-label="Toggle light/dark theme" title="Toggle theme"></button>
+    </div>
+    <div id="hint"><span><b>Space</b> to start / pause - <b>click</b> a spot to inspect its splat - <b>drag</b> in Layers to orbit</span></div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+  <script>
+    (function () {
+      var btn = document.getElementById('btnTheme');
+      var sun = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>';
+      var moon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>';
+      function sync() {
+        var t = document.documentElement.dataset.theme;
+        btn.innerHTML = t === 'dark' ? sun : moon; // shows the theme you switch to
+        document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#111214' : '#FFFFFF';
+      }
+      function set(t) {
+        document.documentElement.dataset.theme = t;
+        try { localStorage.setItem('theme', t); } catch (e) {}
+        sync();
+        document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: t } }));
+      }
+      btn.onclick = function () { set(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); };
+      sync();
+    })();
+  </script>
+</body>
+</html>
