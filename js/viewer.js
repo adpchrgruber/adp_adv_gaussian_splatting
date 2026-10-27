@@ -96,9 +96,9 @@ export class Viewer {
     return { x: (cw - s) / 2, y: (ch - s) / 2, s };
   }
 
-  matrix(mode, W) {
+  matrix(three, W) {
     const cw = this.canvas.width, ch = this.canvas.height;
-    if (mode !== 'layers') {
+    if (!three) {
       const f = this.frame(), d = this.dpr, s = f.s * d / W;
       // image px -> canvas px -> clip
       const sx = 2 * s / cw, sy = -2 * s / ch;
@@ -124,26 +124,25 @@ export class Viewer {
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.disable(gl.SCISSOR_TEST);
-    gl.clearColor(opt.paper[0], opt.paper[1], opt.paper[2], 1); gl.clear(gl.COLOR_BUFFER_BIT);
-    if (opt.mode !== 'layers') {
+    // 3D: the whole pane is the training background; flat: only the picture square
+    const bg = opt.three ? [0, 0, 0] : opt.paper;
+    gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    if (!opt.three) {
       // flat views: a black picture square (the training background), splats clipped to it
       const f = this.frame(), d = this.dpr;
       gl.enable(gl.SCISSOR_TEST);
       gl.scissor(Math.round(f.x * d), Math.round(this.canvas.height - (f.y + f.s) * d), Math.round(f.s * d), Math.round(f.s * d));
       gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
     }
-    const mvp = this.matrix(opt.mode, W);
+    const mvp = this.matrix(opt.three, W);
     if (this.data.length < n * STRIDE) this.data = new Float32Array(n * STRIDE * 2);
     const d = this.data, prm = tr.prm, P = 9;
     const sig = (x) => 1 / (1 + Math.exp(-x));
-    // depth for the exploded view: rank in the sort order, spread through the volume
-    const rank = new Float32Array(tr.max);
-    for (let k = 0; k < n; k++) rank[tr.order[k]] = k / Math.max(1, n - 1);
+    const zOf = this.depth(tr, opt.spread);
     let ids = [];
     for (let k = n - 1; k >= 0; k--) ids.push(tr.order[k]); // back to front
     if (opt.solo >= 0) ids = ids.filter((i) => i === opt.solo);
-    const zOf = (i) => (0.5 - rank[i]) * opt.spread * W; // front splats nearer the camera
-    if (opt.mode === 'layers') {
+    if (opt.three) {
       const v = (i) => { const x = prm[i * P], y = prm[i * P + 1], z = zOf(i); return mvp[3] * x + mvp[7] * y + mvp[11] * z + mvp[15]; };
       const w = new Float32Array(tr.max); for (const i of ids) w[i] = v(i);
       ids.sort((a, b) => w[b] - w[a]);
@@ -151,7 +150,7 @@ export class Viewer {
     let q = 0;
     for (const i of ids) {
       const o = i * P;
-      d[q] = prm[o]; d[q + 1] = prm[o + 1]; d[q + 2] = opt.mode === 'layers' ? zOf(i) : 0;
+      d[q] = prm[o]; d[q + 1] = prm[o + 1]; d[q + 2] = opt.three ? zOf(i) : 0;
       // axes of the widened covariance, the shape the trainer actually sees
       const [xx, xy, yy] = tr.cov(i), mid = (xx + yy) / 2, r = Math.hypot((xx - yy) / 2, xy);
       d[q + 3] = Math.sqrt(mid + r); d[q + 4] = Math.sqrt(Math.max(1e-6, mid - r)); d[q + 5] = 0.5 * Math.atan2(2 * xy, xx - yy);
@@ -189,6 +188,30 @@ export class Viewer {
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, 1);
       }
     }
+  }
+
+  // depth for the 3D view: rank in the blending order, spread through the volume, front splats nearer the camera
+  depth(tr, spread) {
+    const rank = new Float32Array(tr.max), n = tr.n;
+    for (let k = 0; k < n; k++) rank[tr.order[k]] = k / Math.max(1, n - 1);
+    return (i) => (0.5 - rank[i]) * spread * tr.w;
+  }
+
+  // 3D view: the splat whose centre is nearest the click on screen (front one wins a near tie)
+  pick3d(tr, spread, cx, cy) {
+    const mvp = this.matrix(true, tr.w), zOf = this.depth(tr, spread), P = 9;
+    const cw = this.canvas.clientWidth, ch = this.canvas.clientHeight;
+    let best = -1, bd = 14 * 14;
+    for (let k = 0; k < tr.n; k++) {
+      const i = tr.order[k], x = tr.prm[i * P], y = tr.prm[i * P + 1], z = zOf(i);
+      const w = mvp[3] * x + mvp[7] * y + mvp[11] * z + mvp[15];
+      if (w <= 0) continue;
+      const sx = ((mvp[0] * x + mvp[4] * y + mvp[8] * z + mvp[12]) / w * 0.5 + 0.5) * cw;
+      const sy = (0.5 - (mvp[1] * x + mvp[5] * y + mvp[9] * z + mvp[13]) / w * 0.5) * ch;
+      const d = (sx - cx) ** 2 + (sy - cy) ** 2;
+      if (d < bd * 0.8) { bd = d; best = i; } // order is front to back, so later ones need to be clearly nearer
+    }
+    return best;
   }
 
   // CSS px on the canvas -> image px (flat views only)

@@ -64,8 +64,8 @@
         <h2><span class="blue">03</span> Display</h2>
         <div class="slider"><label for="size">Splat size</label><input id="size" type="range" min="0.1" max="1" step="0.05" value="1"><output id="sizeOut"></output></div>
         <label class="check"><input type="checkbox" id="chkCentres"> Show centres</label>
-        <div class="slider" id="spreadRow"><label for="spread">Layers</label><input id="spread" type="range" min="0" max="1.5" step="0.05" value="0.5"><output id="spreadOut"></output></div>
-        <p class="note">Shrink the splats to see that the picture is made of soft blobs. <b>Layers</b> pulls them apart in depth: the order in which they are blended.</p>
+        <div class="slider" id="spreadRow"><label for="spread">3D depth</label><input id="spread" type="range" min="0" max="1.5" step="0.05" value="0.5"><output id="spreadOut"></output></div>
+        <p class="note">Shrink the splats to see that the picture is made of soft blobs. <b>3D</b> (top of the splats pane) pulls them apart in depth, in the order in which they are blended, as soft splats or as ellipses. Drag to orbit.</p>
       </section>
 
       <section class="section" id="secSplat">
@@ -123,10 +123,10 @@
           <span class="tabs">
             <button class="tab active" data-view="render">Render</button>
             <button class="tab" data-view="ellipses">Ellipses</button>
-            <button class="tab" data-view="layers">Layers</button>
+            <button class="tab toggle" id="btn3d" aria-pressed="false" title="Pull the splats apart in depth and orbit them">3D</button>
           </span>
         </div>
-        <div class="stage" id="splatStage"><canvas id="splatCanvas"></canvas><div class="stageHint" id="layersHint">drag to orbit - wheel to zoom</div></div>
+        <div class="stage" id="splatStage"><canvas id="splatCanvas"></canvas><div class="stageHint" id="orbitHint">drag to orbit - wheel to zoom</div></div>
         <div class="readout" id="readoutR"></div>
       </section>
     </main>
@@ -134,7 +134,7 @@
     <div id="stage-controls">
       <button id="btnTheme" type="button" aria-label="Toggle light/dark theme" title="Toggle theme"></button>
     </div>
-    <div id="hint"><span><b>Space</b> to start / pause - <b>click</b> a spot to inspect its splat - <b>drag</b> in Layers to orbit</span></div>
+    <div id="hint"><span><b>Space</b> to start / pause - <b>click</b> a spot to inspect its splat - <b>drag</b> in 3D to orbit</span></div>
   </div>
 
   <script type="module" src="js/main.js"></script>

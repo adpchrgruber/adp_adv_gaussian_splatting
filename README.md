@@ -25,19 +25,19 @@ turns points and photos into a picture that renders in real time.
    are **split** (big ones, into two smaller ones) or **cloned** (small ones), nearly
    invisible ones are **pruned**. *Max splats* is the budget.
 3. **03 Display** — *Splat size* shrinks every splat to show that the picture is made of
-   blobs; *Show centres* marks their positions; *Layers* sets the depth spread of the
-   exploded view.
+   blobs; *Show centres* marks their positions; *3D depth* sets how far the 3D view
+   pulls the splats apart.
 4. **04 One splat** — click the photo or the splats: the splat that paints that spot is
    ringed and its nine numbers are listed (position, size, rotation, colour, opacity,
-   depth order). *Show only this splat* hides all others.
+   depth order). In 3D a click picks the nearest splat centre. *Show only this splat* hides all others.
 5. **05 How it works** — the full 3D pipeline in six steps, and which of them this page
    shows.
 
 **The photo** — *Photo* is the target at its real pixel size; *Error* shows where the
 splats still differ from it (white = wrong). **The splats** — *Render* is the blended
 result, drawn smoothly at screen resolution; *Ellipses* outlines every splat at 2 sigma
-in its colour; *Layers* pulls the splats apart in their blending order — drag to orbit,
-wheel to zoom.
+in its colour. **3D** works with both: it pulls the splats (or their ellipses) apart in
+their blending order, front splats nearest to you — drag to orbit, wheel to zoom.
 
 The readouts compare the photo (W × H × 3 numbers) with the splats (n × 9 numbers) and
 give the match as PSNR in dB (higher is better; above ~30 dB differences are hard to see).
@@ -137,7 +137,7 @@ index.html       page, panels and theme switch (dark first)
 css/style.css    UI style
 js/main.js       UI, training loop, inspector
 js/splats.js     2D Gaussian splatting: tiles, blending, gradients, Adam, densification
-js/viewer.js     WebGL2 splat renderer: render, ellipses, layers
+js/viewer.js     WebGL2 splat renderer: render and ellipses, flat or in 3D
 js/images.js     drawn test photos, loading your own
 CITATION.cff     how to cite, incl. the AI tools used
 ```

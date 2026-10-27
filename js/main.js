@@ -17,7 +17,7 @@ const ui = {
 };
 
 let tr = null, target = null, ownImage = null;
-let running = false, photoView = 'photo', splatView = 'render';
+let running = false, photoView = 'photo', splatView = 'render', three = false;
 let selected = -1, pickAt = null;
 let rate = 0, rateT = performance.now(), rateIter = 0;
 
@@ -116,7 +116,7 @@ function drawPhoto() {
 
 function drawSplats() {
   viewer.draw(tr, {
-    mode: splatView, size: +ui.size.value, centres: ui.centres.checked, spread: +ui.spread.value,
+    mode: splatView, three, size: +ui.size.value, centres: ui.centres.checked, spread: +ui.spread.value,
     selected, solo: ui.solo.checked ? selected : -1,
     accent: cssColor('--blue-fill'), paper: cssColor('--paper'),
   });
@@ -213,36 +213,45 @@ sc.addEventListener('pointermove', (e) => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
-  if (splatView === 'layers' && drag.moved) {
+  if (three && drag.moved) {
     viewer.yaw += dx * 0.008;
     viewer.pitch = Math.max(-1.3, Math.min(1.3, viewer.pitch + dy * 0.008));
     drag.x = e.clientX; drag.y = e.clientY;
   }
 });
 sc.addEventListener('pointerup', (e) => {
-  if (drag && !drag.moved && splatView !== 'layers') {
-    const r = sc.getBoundingClientRect();
-    const [x, y] = viewer.toImage(e.clientX - r.left, e.clientY - r.top, tr.w);
-    pickFrom(x, y);
+  if (drag && !drag.moved) {
+    const r = sc.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
+    if (three) {
+      // in 3D a click picks the splat centre nearest to it
+      selected = viewer.pick3d(tr, +ui.spread.value, cx, cy);
+      pickAt = selected >= 0 ? [tr.prm[selected * P], tr.prm[selected * P + 1]] : null;
+      showSplat();
+    } else pickFrom(...viewer.toImage(cx, cy, tr.w));
   }
   drag = null;
 });
 sc.addEventListener('wheel', (e) => {
-  if (splatView !== 'layers') return;
+  if (!three) return;
   e.preventDefault();
   viewer.dist = Math.max(0.8, Math.min(6, viewer.dist * Math.exp(e.deltaY * 0.001)));
 }, { passive: false });
 
 function tabs(pane, set) {
-  for (const b of document.querySelectorAll(`#${pane} .tab`)) {
+  for (const b of document.querySelectorAll(`#${pane} .tab:not(.toggle)`)) {
     b.onclick = () => {
-      for (const o of document.querySelectorAll(`#${pane} .tab`)) o.classList.toggle('active', o === b);
+      for (const o of document.querySelectorAll(`#${pane} .tab:not(.toggle)`)) o.classList.toggle('active', o === b);
       set(b.dataset.view);
     };
   }
 }
 tabs('photoPane', (v) => { photoView = v; });
-tabs('splatPane', (v) => { splatView = v; $('splatStage').classList.toggle('orbit', v === 'layers'); });
+tabs('splatPane', (v) => { splatView = v; });
+$('btn3d').onclick = () => {
+  three = !three;
+  $('btn3d').classList.toggle('on', three); $('btn3d').setAttribute('aria-pressed', three);
+  $('splatStage').classList.toggle('orbit', three);
+};
 
 addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
