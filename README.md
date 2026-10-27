@@ -126,9 +126,7 @@ python3 -m http.server 8000
 
 Open http://localhost:8000.
 
-## Publish on GitHub Pages
 
-Push the repository, then Settings › Pages › Deploy from a branch › `main` / `/ (root)`.
 
 ## Repository layout
 
